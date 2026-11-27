@@ -1,7 +1,7 @@
 rules_version = '2';
 
-// Only signed-in staff can touch the ledger. Staff = a document in /staff whose
-// id is the person's email in lower case (add these in the Firebase console).
+// Only signed-in staff can touch the ledger: the shared site login below, or
+// anyone with a document in /staff whose id is their email in lower case.
 service cloud.firestore {
   match /databases/{database}/documents {
     function signedIn() {
@@ -10,8 +10,12 @@ service cloud.firestore {
     function email() {
       return request.auth.token.email.lower();
     }
+    // The shared site login, plus anyone listed in /staff.
     function isStaff() {
-      return signedIn() && exists(/databases/$(database)/documents/staff/$(email()));
+      return signedIn() && (
+        email() == 'paulanthony@cappiali.com' ||
+        exists(/databases/$(database)/documents/staff/$(email()))
+      );
     }
 
     // Each person may check their own staff entry; nobody can edit the list from the app.
