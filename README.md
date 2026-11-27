@@ -52,6 +52,7 @@ save shows a message and nothing is lost on screen.
 
 - **Inventory** — the ledger. + New Entry, Edit Record, Mark Sold, auto estimate per card.
 - **Sales** — every sale with price, cost, profit, payment, buyer and show; filter by show.
+- **Profit & Loss** — cards (sale price − cost), shows (income − costs) and advertising (spend, plus the sales each ad brought in), with a combined net that counts each sale once; filter by month or year.
 - **Shows** — per show: gross sales, card profit, other income (vendor tables, admission),
   expenses, net profit; cash drawer (float + cash sales − buys); retention:
   door count new vs. returning, repeat buyers, and sell-through (use **Open Show** on the day to snapshot listed inventory).

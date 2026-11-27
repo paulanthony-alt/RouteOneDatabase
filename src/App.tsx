@@ -20,10 +20,11 @@ import ShowsPage from './pages/ShowsPage';
 import RatesPage from './pages/RatesPage';
 import BankrollPage from './pages/BankrollPage';
 import TasksPage from './pages/TasksPage';
+import PnLPage from './pages/PnLPage';
 import InterestsPage, { matchesFor } from './pages/InterestsPage';
 
-export type Page = 'inventory' | 'sales' | 'shows' | 'tasks' | 'interests' | 'rates' | 'bankroll';
-const PAGES: Page[] = ['inventory', 'sales', 'shows', 'tasks', 'interests', 'rates', 'bankroll'];
+export type Page = 'inventory' | 'sales' | 'pnl' | 'shows' | 'tasks' | 'interests' | 'rates' | 'bankroll';
+const PAGES: Page[] = ['inventory', 'sales', 'pnl', 'shows', 'tasks', 'interests', 'rates', 'bankroll'];
 
 export type Modal =
   | { kind: 'new'; showId?: string }
@@ -104,6 +105,7 @@ function Shell({ user }: { user?: User }) {
   const nav: [Page, string, string | number][] = [
     ['inventory', 'INVENTORY', db.cards.filter((c) => c.status !== 'Sold').length],
     ['sales', 'SALES', soldCards(db).length],
+    ['pnl', 'PROFIT & LOSS', ''],
     ['shows', 'SHOWS', db.shows.length],
     ['tasks', 'TASKS', db.tasks.filter((t) => t.status !== 'done').length || ''],
     ['interests', 'INTERESTS', db.interests.filter((i) => i.status !== 'closed').length || ''],
@@ -184,6 +186,7 @@ function Shell({ user }: { user?: User }) {
           />
         )}
         {page === 'rates' && <RatesPage onOpen={(id) => { setSel(id); window.location.hash = 'inventory'; }} />}
+        {page === 'pnl' && <PnLPage />}
         {page === 'tasks' && <TasksPage />}
         {page === 'interests' && <InterestsPage onOpenCard={(id) => { setSel(id); window.location.hash = 'inventory'; }} />}
         {page === 'bankroll' && <BankrollPage />}

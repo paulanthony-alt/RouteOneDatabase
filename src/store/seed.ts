@@ -41,6 +41,7 @@ export function seed(): DB {
     })),
     tasks: [],
     interests: [],
+    ads: [],
     shows: [
       {
         id: 'show-2026-12-12',

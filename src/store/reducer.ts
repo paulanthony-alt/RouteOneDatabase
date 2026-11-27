@@ -1,4 +1,4 @@
-import type { Card, CardInput, DB, Estimate, Interest, Payment, Show, ShowLine, Task } from '../types';
+import type { Ad, Card, CardInput, DB, Estimate, Interest, Payment, Show, ShowLine, Task } from '../types';
 import { today } from '../lib/format';
 
 /*
@@ -11,7 +11,7 @@ import { today } from '../lib/format';
  * document), which is what lets Firestore load just those documents.
  */
 
-export type SaleInput = { price: number; on: string; payment: Payment; buyer: string; showId: string | null };
+export type SaleInput = { price: number; on: string; payment: Payment; buyer: string; showId: string | null; adId: number | null };
 
 export type Action =
   | { type: 'addCard'; input: CardInput; event: string; on: string; note: string; paid: boolean; showId: string | null; estimate?: Estimate | null }
@@ -37,6 +37,9 @@ export type Action =
   | { type: 'addInterest'; interest: Omit<Interest, 'id' | 'createdOn'> }
   | { type: 'updateInterest'; id: number; patch: Partial<Omit<Interest, 'id'>> }
   | { type: 'removeInterest'; id: number }
+  | { type: 'addAd'; ad: Omit<Ad, 'id'> }
+  | { type: 'updateAd'; id: number; patch: Partial<Omit<Ad, 'id'>> }
+  | { type: 'removeAd'; id: number }
   | { type: 'replace'; db: DB };
 
 const mapCard = (db: DB, id: string, f: (c: Card) => Card): DB => ({ ...db, cards: db.cards.map((c) => (c.id === id ? f(c) : c)) });
@@ -70,7 +73,7 @@ export function reducer(db: DB, a: Action): DB {
     case 'sellCard': {
       const src = db.cards.find((c) => c.id === a.id);
       if (!src || src.status === 'Sold' || a.qty < 1 || a.qty > src.qty) return db;
-      const sale = { price: a.price, on: a.on, at: new Date().toISOString(), payment: a.payment, buyer: a.buyer.trim(), showId: a.showId };
+      const sale = { price: a.price, on: a.on, at: new Date().toISOString(), payment: a.payment, buyer: a.buyer.trim(), showId: a.showId, adId: a.adId };
       const show = a.showId ? db.shows.find((s) => s.id === a.showId)?.name : '';
       const note = [a.note || show, a.payment, a.buyer && `to ${a.buyer}`].filter(Boolean).join(' · ');
       if (a.qty === src.qty) {
@@ -144,6 +147,12 @@ export function reducer(db: DB, a: Action): DB {
       return { ...db, interests: db.interests.map((x) => (x.id === a.id ? { ...x, ...a.patch } : x)) };
     case 'removeInterest':
       return { ...db, interests: db.interests.filter((x) => x.id !== a.id) };
+    case 'addAd':
+      return done({ ...db, ads: [...db.ads, { ...a.ad, id: nid++ }] });
+    case 'updateAd':
+      return { ...db, ads: db.ads.map((x) => (x.id === a.id ? { ...x, ...a.patch } : x)) };
+    case 'removeAd':
+      return { ...db, ads: db.ads.filter((x) => x.id !== a.id) };
     case 'replace':
       return normalize(a.db);
   }
@@ -152,7 +161,7 @@ export function reducer(db: DB, a: Action): DB {
 
 /** Fills in lists added after a ledger was first saved, so older data keeps working. */
 export function normalize(db: DB): DB {
-  return { ...db, tasks: db.tasks ?? [], interests: db.interests ?? [] };
+  return { ...db, tasks: db.tasks ?? [], interests: db.interests ?? [], ads: db.ads ?? [] };
 }
 
 /** Actions that read or change one existing card, named by `id`. */

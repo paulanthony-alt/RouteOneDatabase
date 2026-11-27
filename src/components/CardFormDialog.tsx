@@ -35,6 +35,7 @@ export default function CardFormDialog({ card, defaultShowId = null, onClose, on
     payment: (card?.sale?.payment ?? 'Cash') as Payment,
     buyer: card?.sale?.buyer ?? '',
     saleShow: card?.sale?.showId ?? '',
+    saleAd: card?.sale?.adId != null ? String(card.sale.adId) : '',
     event: 'ACQUIRED',
     on: today(),
     note: '',
@@ -77,7 +78,7 @@ export default function CardFormDialog({ card, defaultShowId = null, onClose, on
     const r = card
       ? await dispatch({
           type: 'updateCard', id: card.id, input, estimate,
-          sale: sold ? { price: salePrice, on: f.saleOn, payment: f.payment, buyer: f.buyer, showId: f.saleShow || null } : undefined,
+          sale: sold ? { price: salePrice, on: f.saleOn, payment: f.payment, buyer: f.buyer, showId: f.saleShow || null, adId: f.saleAd ? Number(f.saleAd) : null } : undefined,
         })
       : await dispatch({ type: 'addCard', input, event: f.event, on: f.on, note: f.note.trim(), paid: f.paid, showId: f.showId || null, estimate });
     if (!r) return setBusy(false); // error shown in the toast; keep the form open
@@ -127,10 +128,16 @@ export default function CardFormDialog({ card, defaultShowId = null, onClose, on
             <select value={f.payment} onChange={set('payment')}>{PAYMENTS.map((p) => <option key={p}>{p}</option>)}</select>
           </Field>
           <Field label="BUYER"><input value={f.buyer} onChange={set('buyer')} /></Field>
-          <Field label="SOLD AT SHOW" wide>
+          <Field label="SOLD AT SHOW">
             <select value={f.saleShow} onChange={set('saleShow')}>
               <option value="">Not at a show</option>
               {shows.map((s) => <option key={s.id} value={s.id}>{s.name} · {s.date}</option>)}
+            </select>
+          </Field>
+          <Field label="CAME FROM AN AD?">
+            <select value={f.saleAd} onChange={set('saleAd')}>
+              <option value="">No / don’t know</option>
+              {db.ads.map((a) => <option key={a.id} value={a.id}>{a.name} · {a.channel}</option>)}
             </select>
           </Field>
         </>

@@ -25,6 +25,7 @@ export default function MarkSoldDialog({ card: given, defaultShowId, onClose, on
   const [payment, setPayment] = useState<Payment>('Cash');
   const [buyer, setBuyer] = useState('');
   const [showId, setShowId] = useState(defaultShowId ?? todayShow);
+  const [adId, setAdId] = useState('');
   const [note, setNote] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -45,7 +46,7 @@ export default function MarkSoldDialog({ card: given, defaultShowId, onClose, on
     if (!(p >= 0)) return setError('Enter a sale price of $0 or more.');
     setBusy(true);
     setError('');
-    const r = await dispatch({ type: 'sellCard', id: card.id, qty: q, price: p, on, note: note.trim(), payment, buyer, showId: showId || null });
+    const r = await dispatch({ type: 'sellCard', id: card.id, qty: q, price: p, on, note: note.trim(), payment, buyer, showId: showId || null, adId: adId ? Number(adId) : null });
     if (!r) return setBusy(false);
     onSaved(r.newCardIds[0] ?? card.id);
   }
@@ -87,7 +88,13 @@ export default function MarkSoldDialog({ card: given, defaultShowId, onClose, on
           {db.shows.map((s) => <option key={s.id} value={s.id}>{s.name} · {s.date}</option>)}
         </select>
       </Field>
-      <Field label="NOTE" wide><input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Optional" /></Field>
+      <Field label="CAME FROM AN AD?">
+        <select value={adId} onChange={(e) => setAdId(e.target.value)}>
+          <option value="">No / don’t know</option>
+          {[...db.ads].sort((a, b) => b.on.localeCompare(a.on)).map((a) => <option key={a.id} value={a.id}>{a.name} · {a.channel}</option>)}
+        </select>
+      </Field>
+      <Field label="NOTE"><input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Optional" /></Field>
       {valid && (
         <div className="field wide sale-sum">
           <span className="label">PROCEEDS</span>

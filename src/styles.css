@@ -254,3 +254,14 @@ td.ledger-label, td.set-cell { font-size: 13px; color: var(--text-2); padding: 1
 .match .label { color: var(--gain); }
 .match-row { display: flex; justify-content: space-between; gap: 10px; background: none; border: 0; padding: 4px 0; text-align: left; font-size: 13px; }
 .match-row:hover span:first-child { color: var(--accent); }
+
+/* ---------- Profit & loss ---------- */
+.section-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-end; gap: 12px; margin-top: 8px; }
+.section-head h2 { font-size: 30px; }
+.sum-list .grand { border-top: 1px solid var(--text-2); border-bottom: 0; padding-top: 12px; }
+.sum-list .grand dt { font-family: var(--f-cond); font-weight: 700; font-size: 18px; letter-spacing: .08em; }
+.sum-list .grand dd { font-size: 20px; }
+.table-wrap.flat { border: 0; }
+table.compact { min-width: 0; }
+table.compact td { padding: 10px 14px; }
+a.card-btn:hover .name { color: var(--accent); }

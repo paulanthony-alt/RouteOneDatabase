@@ -16,6 +16,8 @@ export interface Sale {
   payment: Payment;
   buyer: string;
   showId: string | null;
+  /** The ad that brought this buyer in, if any. */
+  adId?: number | null;
 }
 
 export interface Estimate {
@@ -120,6 +122,19 @@ export interface Interest {
   createdOn: string;
 }
 
+export const AD_CHANNELS = ['Instagram', 'Facebook', 'TikTok', 'Flyers', 'Local paper', 'Other'];
+
+/** Money spent on advertising. Sales can point back to the ad that brought the buyer in. */
+export interface Ad {
+  id: number;
+  name: string;
+  channel: string;
+  on: string; // date the money was spent (YYYY-MM-DD)
+  spend: number;
+  showId: string | null;
+  notes: string;
+}
+
 export interface DB {
   version: 1;
   nextCard: number;
@@ -128,6 +143,7 @@ export interface DB {
   shows: Show[];
   tasks: Task[];
   interests: Interest[];
+  ads: Ad[];
   bankroll: { starting: number; startedOn: string; adjustments: CashAdjustment[] };
   settings: { multipliers: Record<string, number>; pokemonApiKey: string };
 }

@@ -11,7 +11,7 @@ export interface LedgerLine {
   on: string;
   label: string;
   amount: number;
-  kind: 'START' | 'BUY' | 'SALE' | 'SHOW' | 'ADJUST';
+  kind: 'START' | 'BUY' | 'SALE' | 'SHOW' | 'AD' | 'ADJUST';
   adjId?: number;
 }
 
@@ -48,6 +48,8 @@ export function cashLedger(db: DB): LedgerLine[] {
       out.push({ on: s.date, label: `${s.name} · ${l.label}`, amount: l.kind === 'income' ? l.amount : -l.amount, kind: 'SHOW' });
     }
   }
+
+  for (const ad of db.ads) out.push({ on: ad.on, label: `Ad · ${ad.name} (${ad.channel})`, amount: -ad.spend, kind: 'AD' });
 
   for (const a of db.bankroll.adjustments) out.push({ on: a.on, label: a.note || 'Adjustment', amount: a.amount, kind: 'ADJUST', adjId: a.id });
 
@@ -108,4 +110,66 @@ export function nextShow(db: DB): Show | undefined {
   const t = today();
   const sorted = [...db.shows].sort((a, b) => a.date.localeCompare(b.date));
   return sorted.find((s) => s.date >= t) ?? sorted[sorted.length - 1];
+}
+
+/* ---------- Profit & loss ---------- */
+
+/** 'all', a year ('2026') or a month ('2026-12'). */
+export type Period = string;
+export const inPeriod = (date: string, period: Period) => period === 'all' || date.startsWith(period);
+
+export function periodsIn(db: DB): string[] {
+  const dates = [
+    ...soldCards(db).map((c) => c.sale!.on),
+    ...db.shows.filter((s) => s.lines.length).map((s) => s.date),
+    ...db.ads.map((a) => a.on),
+  ];
+  const months = [...new Set(dates.map((d) => d.slice(0, 7)))].sort().reverse();
+  const years = [...new Set(months.map((m) => m.slice(0, 4)))];
+  return [...years, ...months].sort((a, b) => b.localeCompare(a) || a.length - b.length);
+}
+
+export function pnl(db: DB, period: Period) {
+  const sales = soldCards(db).filter((c) => inPeriod(c.sale!.on, period));
+  const revenue = total(sales, (c) => c.sale!.price);
+  const cost = total(sales, (c) => c.cost);
+  const profitOf = (cs: Card[]) => total(cs, (c) => c.sale!.price - c.cost);
+  const cards = {
+    sales, units: units(sales), revenue, cost, profit: revenue - cost,
+    atShows: profitOf(sales.filter((c) => c.sale!.showId)),
+    fromAds: profitOf(sales.filter((c) => c.sale!.adId != null)),
+  };
+
+  const shows = db.shows
+    .filter((s) => inPeriod(s.date, period))
+    .sort((a, b) => b.date.localeCompare(a.date))
+    .map((show) => {
+      const st = showStats(db, show);
+      return { show, cardProfit: st.cardProfit, income: st.income, expenses: st.expenses, other: st.income - st.expenses, net: st.net };
+    });
+  const showOther = shows.reduce((s, x) => s + x.other, 0);
+
+  const ads = db.ads
+    .filter((a) => inPeriod(a.on, period))
+    .sort((a, b) => b.on.localeCompare(a.on))
+    .map((ad) => {
+      const brought = soldCards(db).filter((c) => c.sale!.adId === ad.id);
+      const profit = profitOf(brought);
+      return { ad, sales: brought.length, revenue: total(brought, (c) => c.sale!.price), profit, net: profit - ad.spend };
+    });
+  const adSpend = ads.reduce((s, x) => s + x.ad.spend, 0);
+
+  return {
+    cards, shows, ads, adSpend, showOther,
+    /** Card profit is counted once (under Cards) even when the sale happened at a show or came from an ad. */
+    net: cards.profit + showOther - adSpend,
+  };
+}
+
+export function monthly(db: DB, year: string | null) {
+  const months = periodsIn(db).filter((p) => p.length === 7 && (!year || p.startsWith(year)));
+  return months.map((m) => {
+    const p = pnl(db, m);
+    return { month: m, cards: p.cards.profit, shows: p.showOther, ads: -p.adSpend, net: p.net };
+  });
 }
