@@ -1,4 +1,4 @@
-import type { Card, CardInput, DB, Estimate, Payment, Show, ShowLine } from '../types';
+import type { Card, CardInput, DB, Estimate, Interest, Payment, Show, ShowLine, Task } from '../types';
 import { today } from '../lib/format';
 
 /*
@@ -31,6 +31,12 @@ export type Action =
   | { type: 'setMultiplier'; grade: string; value: number }
   | { type: 'removeMultiplier'; grade: string }
   | { type: 'setApiKey'; key: string }
+  | { type: 'addTask'; task: Omit<Task, 'id' | 'createdOn' | 'doneOn'> }
+  | { type: 'updateTask'; id: number; patch: Partial<Omit<Task, 'id'>> }
+  | { type: 'removeTask'; id: number }
+  | { type: 'addInterest'; interest: Omit<Interest, 'id' | 'createdOn'> }
+  | { type: 'updateInterest'; id: number; patch: Partial<Omit<Interest, 'id'>> }
+  | { type: 'removeInterest'; id: number }
   | { type: 'replace'; db: DB };
 
 const mapCard = (db: DB, id: string, f: (c: Card) => Card): DB => ({ ...db, cards: db.cards.map((c) => (c.id === id ? f(c) : c)) });
@@ -118,11 +124,36 @@ export function reducer(db: DB, a: Action): DB {
     }
     case 'setApiKey':
       return { ...db, settings: { ...db.settings, pokemonApiKey: a.key } };
+    case 'addTask':
+      return done({ ...db, tasks: [...db.tasks, { ...a.task, id: nid++, createdOn: today(), doneOn: a.task.status === 'done' ? today() : null }] });
+    case 'updateTask':
+      return {
+        ...db,
+        tasks: db.tasks.map((t) => {
+          if (t.id !== a.id) return t;
+          const next = { ...t, ...a.patch };
+          if (a.patch.status) next.doneOn = a.patch.status === 'done' ? (t.doneOn ?? today()) : null;
+          return next;
+        }),
+      };
+    case 'removeTask':
+      return { ...db, tasks: db.tasks.filter((t) => t.id !== a.id) };
+    case 'addInterest':
+      return done({ ...db, interests: [...db.interests, { ...a.interest, id: nid++, createdOn: today() }] });
+    case 'updateInterest':
+      return { ...db, interests: db.interests.map((x) => (x.id === a.id ? { ...x, ...a.patch } : x)) };
+    case 'removeInterest':
+      return { ...db, interests: db.interests.filter((x) => x.id !== a.id) };
     case 'replace':
-      return a.db;
+      return normalize(a.db);
   }
 }
 
+
+/** Fills in lists added after a ledger was first saved, so older data keeps working. */
+export function normalize(db: DB): DB {
+  return { ...db, tasks: db.tasks ?? [], interests: db.interests ?? [] };
+}
 
 /** Actions that read or change one existing card, named by `id`. */
 export const CARD_ACTIONS = new Set<Action['type']>(['updateCard', 'sellCard', 'setEstimate', 'applyEstimate']);

@@ -55,6 +55,8 @@ save shows a message and nothing is lost on screen.
 - **Shows** — per show: gross sales, card profit, other income (vendor tables, admission),
   expenses, net profit; cash drawer (float + cash sales − buys); retention:
   door count new vs. returning, repeat buyers, and sell-through (use **Open Show** on the day to snapshot listed inventory).
+- **Tasks** — to-do board (To do / Doing / Done) with due dates, who, priority and show; overdue and due-today counts.
+- **Interests** — want list: what customers are looking for (with contact and budget) and cards we want to buy. Flags customer wants that are in stock now.
 - **Market Rates** — estimate all cards, apply estimates, tune grade multipliers.
 - **Bankroll** — starting money, deposits/withdrawals, running cash balance, total worth.
 

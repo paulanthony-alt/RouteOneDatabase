@@ -1,7 +1,7 @@
 import type { DB } from '../types';
 import { today } from '../lib/format';
 import type { Backend, Snapshot } from './backend';
-import { diffResult, reducer, type Action } from './reducer';
+import { diffResult, normalize, reducer, type Action } from './reducer';
 import { seed } from './seed';
 
 /** Data saved in this browser only (used when Firebase isn't configured). */
@@ -21,7 +21,7 @@ export function readLocal(): DB | null {
   try {
     const raw = localStorage.getItem(LOCAL_KEY);
     const db = raw ? (JSON.parse(raw) as DB) : null;
-    return db && db.version === 1 ? db : null;
+    return db && db.version === 1 ? normalize(db) : null;
   } catch {
     return null;
   }

@@ -88,12 +88,46 @@ export interface CashAdjustment {
   note: string;
 }
 
+export type TaskStatus = 'todo' | 'doing' | 'done';
+
+export interface Task {
+  id: number;
+  title: string;
+  due: string; // YYYY-MM-DD or ''
+  who: string;
+  priority: 'normal' | 'high';
+  status: TaskStatus;
+  showId: string | null;
+  notes: string;
+  createdOn: string;
+  doneOn: string | null;
+}
+
+export type InterestKind = 'customer' | 'buy';
+export type InterestStatus = 'open' | 'contacted' | 'closed';
+
+/** Someone wants a card: a customer's want-list entry, or a card we're hunting to buy. */
+export interface Interest {
+  id: number;
+  kind: InterestKind;
+  who: string;
+  contact: string;
+  card: string;
+  grade: string;
+  maxPrice: number | null;
+  notes: string;
+  status: InterestStatus;
+  createdOn: string;
+}
+
 export interface DB {
   version: 1;
   nextCard: number;
   nextId: number;
   cards: Card[];
   shows: Show[];
+  tasks: Task[];
+  interests: Interest[];
   bankroll: { starting: number; startedOn: string; adjustments: CashAdjustment[] };
   settings: { multipliers: Record<string, number>; pokemonApiKey: string };
 }

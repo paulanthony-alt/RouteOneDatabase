@@ -39,6 +39,8 @@ export function seed(): DB {
       acquiredShowId: null, splitFrom: null, sale: sale ?? null, estimate: null,
       events: events.map((e) => ({ ...e })),
     })),
+    tasks: [],
+    interests: [],
     shows: [
       {
         id: 'show-2026-12-12',

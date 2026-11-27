@@ -4,7 +4,7 @@ import {
 import type { Card, DB } from '../types';
 import { fb } from '../lib/firebase';
 import type { Backend, Snapshot } from './backend';
-import { CARD_ACTIONS, diffResult, reducer, type Action } from './reducer';
+import { CARD_ACTIONS, diffResult, normalize, reducer, type Action } from './reducer';
 
 /*
  * Firestore layout
@@ -59,7 +59,7 @@ export function firestoreBackend(): Backend {
       let cards: Card[] | undefined;
       const emit = () => {
         if (meta === undefined || cards === undefined) return;
-        const s: Snapshot = meta === null ? { status: 'empty' } : { status: 'ready', db: { ...meta, cards } };
+        const s: Snapshot = meta === null ? { status: 'empty' } : { status: 'ready', db: normalize({ ...meta, cards }) };
         onData(s);
       };
       const stopMeta = onSnapshot(metaRef, (s) => { meta = s.exists() ? s.data() : null; emit(); }, onError);
@@ -85,7 +85,7 @@ export function firestoreBackend(): Backend {
           cards.push(s.data());
         }
 
-        const before: DB = { ...meta, cards };
+        const before: DB = normalize({ ...meta, cards });
         const after = reducer(before, action);
         const next = split(after);
 

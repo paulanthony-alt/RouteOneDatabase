@@ -19,9 +19,11 @@ import SalesPage from './pages/SalesPage';
 import ShowsPage from './pages/ShowsPage';
 import RatesPage from './pages/RatesPage';
 import BankrollPage from './pages/BankrollPage';
+import TasksPage from './pages/TasksPage';
+import InterestsPage, { matchesFor } from './pages/InterestsPage';
 
-export type Page = 'inventory' | 'sales' | 'shows' | 'rates' | 'bankroll';
-const PAGES: Page[] = ['inventory', 'sales', 'shows', 'rates', 'bankroll'];
+export type Page = 'inventory' | 'sales' | 'shows' | 'tasks' | 'interests' | 'rates' | 'bankroll';
+const PAGES: Page[] = ['inventory', 'sales', 'shows', 'tasks', 'interests', 'rates', 'bankroll'];
 
 export type Modal =
   | { kind: 'new'; showId?: string }
@@ -103,9 +105,13 @@ function Shell({ user }: { user?: User }) {
     ['inventory', 'INVENTORY', db.cards.filter((c) => c.status !== 'Sold').length],
     ['sales', 'SALES', soldCards(db).length],
     ['shows', 'SHOWS', db.shows.length],
+    ['tasks', 'TASKS', db.tasks.filter((t) => t.status !== 'done').length || ''],
+    ['interests', 'INTERESTS', db.interests.filter((i) => i.status !== 'closed').length || ''],
     ['rates', 'MARKET RATES', ''],
     ['bankroll', 'BANKROLL', money(cashOnHand(db))],
   ];
+
+  const inStock = db.interests.filter((i) => i.status !== 'closed' && i.kind === 'customer' && matchesFor(db, i).length).length;
 
   return (
     <div className="app">
@@ -139,7 +145,12 @@ function Shell({ user }: { user?: User }) {
         <nav aria-label="Sections">
           {nav.map(([p, label, count]) => (
             <a key={p} href={'#' + p} className={page === p ? 'active' : ''} aria-current={page === p ? 'page' : undefined}>
-              {label} <span className="count">{count}</span>
+              {label}{' '}
+              {p === 'interests' && inStock ? (
+                <span className="count gain" title={`${inStock} customer want${inStock === 1 ? '' : 's'} in stock`}>● {count}</span>
+              ) : (
+                <span className="count">{count}</span>
+              )}
             </a>
           ))}
           <a className="soon" aria-disabled="true">VENDORS <span className="count">SOON</span></a>
@@ -173,6 +184,8 @@ function Shell({ user }: { user?: User }) {
           />
         )}
         {page === 'rates' && <RatesPage onOpen={(id) => { setSel(id); window.location.hash = 'inventory'; }} />}
+        {page === 'tasks' && <TasksPage />}
+        {page === 'interests' && <InterestsPage onOpenCard={(id) => { setSel(id); window.location.hash = 'inventory'; }} />}
         {page === 'bankroll' && <BankrollPage />}
       </div>
 
