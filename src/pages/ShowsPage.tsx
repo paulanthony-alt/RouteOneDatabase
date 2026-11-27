@@ -1,7 +1,8 @@
 import { useState, type FormEvent } from 'react';
 import type { Show } from '../types';
 import { useStore } from '../store/store';
-import { nextShow, showStats } from '../store/selectors';
+import { nextShow, showStats, total, units } from '../store/selectors';
+import CommitInput from '../components/CommitInput';
 import { daysUntil, longDate, money, num, rate, signed, tone } from '../lib/format';
 
 interface Props {
@@ -50,11 +51,14 @@ function NewShow({ onDone }: { onDone: (id?: string) => void }) {
   const { db, dispatch } = useStore();
   const [f, setF] = useState({ name: '', date: '', hours: '', venue: '' });
   const set = (k: keyof typeof f) => (e: { target: { value: string } }) => setF((p) => ({ ...p, [k]: e.target.value }));
-  function submit(e: FormEvent) {
+  const [busy, setBusy] = useState(false);
+  async function submit(e: FormEvent) {
     e.preventDefault();
     if (!f.name.trim() || !f.date) return;
-    dispatch({ type: 'addShow', show: { ...f, name: f.name.trim(), float: 0 } });
-    onDone('show-' + db.nextId);
+    setBusy(true);
+    const r = await dispatch({ type: 'addShow', show: { ...f, name: f.name.trim(), float: 0 } });
+    setBusy(false);
+    if (r) onDone(r.newShowIds[0]);
   }
   return (
     <form className="panel form-grid" onSubmit={submit}>
@@ -65,7 +69,7 @@ function NewShow({ onDone }: { onDone: (id?: string) => void }) {
       <label className="field wide"><span className="label">VENUE</span><input value={f.venue} onChange={set('venue')} placeholder="Street, Town ST" /></label>
       <div className="actions wide">
         {db.shows.length > 0 && <button type="button" className="btn btn-ghost" onClick={() => onDone()}>CANCEL</button>}
-        <button type="submit" className="btn btn-accent">ADD SHOW</button>
+        <button type="submit" className="btn btn-accent" disabled={busy}>{busy ? 'ADDING…' : 'ADD SHOW'}</button>
       </div>
     </form>
   );
@@ -114,7 +118,7 @@ function ShowDashboard({ show, onSell, onBuy }: { show: Show; onSell: () => void
           {(['name', 'date', 'hours', 'venue'] as const).map((k) => (
             <label key={k} className={'field' + (k === 'name' || k === 'venue' ? ' wide' : '')}>
               <span className="label">{k.toUpperCase()}</span>
-              <input type={k === 'date' ? 'date' : 'text'} value={show[k]} onChange={(e) => dispatch({ type: 'updateShow', id: show.id, patch: { [k]: e.target.value } })} />
+              <CommitInput type={k === 'date' ? 'date' : 'text'} value={show[k]} onCommit={(v) => (k !== 'date' || v) && dispatch({ type: 'updateShow', id: show.id, patch: { [k]: v } })} />
             </label>
           ))}
         </div>
@@ -165,7 +169,10 @@ function ShowDashboard({ show, onSell, onBuy }: { show: Show; onSell: () => void
             {show.opening ? (
               <span className="note">Opened {new Date(show.opening.at).toLocaleString()} with {show.opening.units} listed units worth {money(show.opening.value)}.</span>
             ) : (
-              <button type="button" className="link" onClick={() => dispatch({ type: 'openShow', id: show.id })}>
+              <button type="button" className="link" onClick={() => {
+                const listed = db.cards.filter((c) => c.status === 'Listed');
+                dispatch({ type: 'openShow', id: show.id, opening: { at: new Date().toISOString(), units: units(listed), value: total(listed, (c) => c.market) } });
+              }}>
                 OPEN SHOW — SNAPSHOT LISTED INVENTORY NOW
               </button>
             )}
@@ -176,8 +183,8 @@ function ShowDashboard({ show, onSell, onBuy }: { show: Show; onSell: () => void
           <span className="label">CASH DRAWER</span>
           <label className="field">
             <span className="label">STARTING FLOAT ($)</span>
-            <input type="number" min={0} step="1" value={show.float || ''} placeholder="0"
-              onChange={(e) => dispatch({ type: 'updateShow', id: show.id, patch: { float: Math.max(0, num(e.target.value) || 0) } })} />
+            <CommitInput type="number" min={0} step="1" value={show.float ? String(show.float) : ''} placeholder="0"
+              onCommit={(v) => dispatch({ type: 'updateShow', id: show.id, patch: { float: Math.max(0, num(v) || 0) } })} />
           </label>
           <dl className="sum-list">
             <div><dt>Float</dt><dd>{money(show.float)}</dd></div>

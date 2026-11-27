@@ -1,6 +1,14 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { onAuthStateChanged, signOut, type User } from 'firebase/auth';
 import type { Card } from './types';
 import { StoreProvider, useStore } from './store/store';
+import type { Backend } from './store/backend';
+import { localBackend } from './store/local';
+import { firestoreBackend } from './store/firestore';
+import { fb, firebaseEnabled } from './lib/firebase';
+import Gate from './components/Gate';
+import Login from './components/Login';
+import Setup from './components/Setup';
 import { cashOnHand, nextShow, soldCards } from './store/selectors';
 import { daysUntil, longDate, money } from './lib/format';
 import Brand from './components/Brand';
@@ -27,15 +35,52 @@ const pageFromHash = (): Page => {
 };
 
 export default function App() {
+  return firebaseEnabled ? <FirebaseApp /> : <LocalApp />;
+}
+
+type Phase = Parameters<Parameters<typeof StoreProvider>[0]['fallback']>[0];
+
+function fallback(phase: Phase, apply: Backend['apply'], user?: User): ReactNode {
+  if (phase.status === 'loading') return <Gate label="LOADING LEDGER…" />;
+  if (phase.status === 'empty') return <Setup apply={apply} />;
+  const denied = (phase.error as { code?: string }).code === 'permission-denied';
   return (
-    <StoreProvider>
+    <Gate label={denied ? 'NO ACCESS' : 'COULDN’T LOAD'} title={denied ? 'Not on the staff list' : 'Something went wrong'}>
+      <p className="sub">
+        {denied
+          ? `${user?.email ?? 'This account'} is signed in, but isn’t on the staff list. Ask the owner to add it in Firebase (Firestore → staff).`
+          : phase.error.message}
+      </p>
+      {user && <button type="button" className="btn btn-ghost" onClick={() => signOut(fb().auth)}>SIGN OUT</button>}
+    </Gate>
+  );
+}
+
+function LocalApp() {
+  const backend = useMemo(localBackend, []);
+  return (
+    <StoreProvider backend={backend} fallback={(p, apply) => fallback(p, apply)}>
       <Shell />
     </StoreProvider>
   );
 }
 
-function Shell() {
-  const { db } = useStore();
+function FirebaseApp() {
+  const [user, setUser] = useState<User | null | undefined>(undefined);
+  useEffect(() => onAuthStateChanged(fb().auth, setUser), []);
+  const backend = useMemo(() => (user ? firestoreBackend() : null), [user]);
+
+  if (user === undefined) return <Gate label="LOADING…" />;
+  if (!user || !backend) return <Login />;
+  return (
+    <StoreProvider key={user.uid} backend={backend} fallback={(p, apply) => fallback(p, apply, user)}>
+      <Shell user={user} />
+    </StoreProvider>
+  );
+}
+
+function Shell({ user }: { user?: User }) {
+  const { db, saving, backend } = useStore();
   const [page, setPage] = useState<Page>(pageFromHash);
   const [q, setQ] = useState('');
   const [sel, setSel] = useState<string | null>(null);
@@ -75,6 +120,15 @@ function Shell() {
           </label>
         )}
         <div className="spacer" />
+        <span className="tag" role="status">
+          {saving ? 'SAVING…' : backend === 'local' ? 'SAVED IN THIS BROWSER' : 'SYNCED'}
+        </span>
+        {user && (
+          <span className="user">
+            <span className="tag" title={user.email ?? ''}>{(user.email ?? '').toUpperCase()}</span>
+            <button className="link" type="button" onClick={() => signOut(fb().auth)}>SIGN OUT</button>
+          </span>
+        )}
         <button className="btn btn-ghost" type="button" onClick={() => setModal({ kind: 'sold' })}>
           RECORD SALE
         </button>

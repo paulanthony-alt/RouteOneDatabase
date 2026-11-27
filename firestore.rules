@@ -1,0 +1,37 @@
+rules_version = '2';
+
+// Only signed-in staff can touch the ledger. Staff = a document in /staff whose
+// id is the person's email in lower case (add these in the Firebase console).
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null && request.auth.token.email is string;
+    }
+    function email() {
+      return request.auth.token.email.lower();
+    }
+    function isStaff() {
+      return signedIn() && exists(/databases/$(database)/documents/staff/$(email()));
+    }
+
+    // Each person may check their own staff entry; nobody can edit the list from the app.
+    match /staff/{id} {
+      allow read: if signedIn() && id == email();
+      allow write: if false;
+    }
+
+    // Shared ledger state (shows, bankroll, settings, ID counters).
+    match /ledger/{doc} {
+      allow read, write: if isStaff();
+    }
+
+    // One document per inventory record.
+    match /cards/{id} {
+      allow read, write: if isStaff();
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

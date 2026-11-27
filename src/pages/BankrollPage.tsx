@@ -1,11 +1,13 @@
 import { useRef, useState, type FormEvent } from 'react';
 import type { DB } from '../types';
-import { freshDB, useStore } from '../store/store';
+import { useStore } from '../store/store';
+import { emptyDB, sampleDB } from '../store/local';
+import CommitInput from '../components/CommitInput';
 import { cashLedger, openCards, total } from '../store/selectors';
 import { money, num, shortDate, signed, today } from '../lib/format';
 
 export default function BankrollPage() {
-  const { db, dispatch } = useStore();
+  const { db, dispatch, backend } = useStore();
   const ledger = cashLedger(db);
   const cash = ledger.reduce((s, l) => s + l.amount, 0);
   const sum = (k: string) => ledger.filter((l) => l.kind === k).reduce((s, l) => s + l.amount, 0);
@@ -46,8 +48,8 @@ export default function BankrollPage() {
     try {
       const next = JSON.parse(await f.text()) as DB;
       if (next.version !== 1 || !Array.isArray(next.cards)) throw new Error('Not a Route One ledger backup.');
-      dispatch({ type: 'replace', db: next });
-      setMsg(`Restored ${next.cards.length} records from ${f.name}.`);
+      if (!confirm(`Replace ALL current data with ${next.cards.length} records from ${f.name}?`)) return;
+      if (await dispatch({ type: 'replace', db: next })) setMsg(`Restored ${next.cards.length} records from ${f.name}.`);
     } catch (e) {
       setMsg((e as Error).message);
     }
@@ -79,13 +81,13 @@ export default function BankrollPage() {
             <div className="form-grid">
               <label className="field">
                 <span className="label">AMOUNT ($)</span>
-                <input type="number" min={0} step="1" value={db.bankroll.starting || ''} placeholder="0"
-                  onChange={(e) => dispatch({ type: 'setBankroll', starting: Math.max(0, num(e.target.value) || 0), startedOn: db.bankroll.startedOn })} />
+                <CommitInput type="number" min={0} step="1" value={db.bankroll.starting ? String(db.bankroll.starting) : ''} placeholder="0"
+                  onCommit={(v) => dispatch({ type: 'setBankroll', starting: Math.max(0, num(v) || 0), startedOn: db.bankroll.startedOn })} />
               </label>
               <label className="field">
                 <span className="label">AS OF</span>
-                <input type="date" value={db.bankroll.startedOn}
-                  onChange={(e) => e.target.value && dispatch({ type: 'setBankroll', starting: db.bankroll.starting, startedOn: e.target.value })} />
+                <CommitInput type="date" value={db.bankroll.startedOn}
+                  onCommit={(v) => v && dispatch({ type: 'setBankroll', starting: db.bankroll.starting, startedOn: v })} />
               </label>
             </div>
             <span className="note">New entries marked “paid out of our money” come out of this; sales go back in. Trades don’t move money.</span>
@@ -132,13 +134,18 @@ export default function BankrollPage() {
 
         <div className="panel">
           <span className="label">DATA</span>
-          <span className="note">Everything is saved in this browser. Export a backup before show day, or to move to another device.</span>
+          <span className="note">{backend === 'local' ? 'Everything is saved in this browser only. Export a backup before show day, or to move to another device.' : 'Everything is saved to the shared Firebase database. Export a backup any time.'}</span>
           <div className="actions">
             <button type="button" className="btn btn-ghost" onClick={exportData}>EXPORT BACKUP</button>
             <button type="button" className="btn btn-ghost" onClick={() => file.current?.click()}>IMPORT BACKUP</button>
-            <button type="button" className="btn btn-ghost danger" onClick={() => { if (confirm('Replace everything with the sample data? Export a backup first if you need it.')) dispatch({ type: 'replace', db: freshDB() }); }}>
-              RESET TO SAMPLE DATA
+            <button type="button" className="btn btn-ghost danger" onClick={() => { if (confirm('Erase every record and start empty? Export a backup first if you need it.')) dispatch({ type: 'replace', db: emptyDB() }); }}>
+              ERASE ALL RECORDS
             </button>
+            {backend === 'local' && (
+              <button type="button" className="btn btn-ghost" onClick={() => { if (confirm('Replace everything with the sample data?')) dispatch({ type: 'replace', db: sampleDB() }); }}>
+                LOAD SAMPLE DATA
+              </button>
+            )}
             <input ref={file} type="file" accept="application/json" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) importData(f); e.target.value = ''; }} />
           </div>
           {msg && <span className="note" role="status">{msg}</span>}

@@ -24,7 +24,7 @@ export default function Detail({ card: c, onEdit, onSell }: Props) {
     setMsg('');
     try {
       const e = await estimateCard(db, c);
-      if (e) dispatch({ type: 'setEstimate', id: c.id, estimate: e });
+      if (e) await dispatch({ type: 'setEstimate', id: c.id, estimate: e });
       else setMsg('No automatic price for this card yet.');
     } catch (e) {
       setMsg((e as Error).message);

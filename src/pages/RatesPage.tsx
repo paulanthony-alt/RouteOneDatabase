@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react';
 import { useStore } from '../store/store';
 import { openCards } from '../store/selectors';
 import { estimateCard } from '../lib/estimate';
+import CommitInput from '../components/CommitInput';
 import { cents, money, num, pct, shortDate, tone } from '../lib/format';
 
 export default function RatesPage({ onOpen }: { onOpen: (id: string) => void }) {
@@ -18,13 +19,20 @@ export default function RatesPage({ onOpen }: { onOpen: (id: string) => void }) 
       const c = cards[i];
       try {
         const e = await estimateCard(db, c);
-        if (e) dispatch({ type: 'setEstimate', id: c.id, estimate: e });
+        if (e) await dispatch({ type: 'setEstimate', id: c.id, estimate: e });
         else failed.push(`${c.id} no price found`);
       } catch (err) {
         failed.push(`${c.id} ${(err as Error).message}`);
       }
       setRun({ done: i + 1, total: cards.length, failed: [...failed] });
     }
+  }
+
+  const [applying, setApplying] = useState(false);
+  async function applyAll() {
+    setApplying(true);
+    for (const c of pending) await dispatch({ type: 'applyEstimate', id: c.id });
+    setApplying(false);
   }
 
   const pending = cards.filter((c) => c.estimate && Math.round(c.estimate.value * 100) / 100 !== c.market);
@@ -49,9 +57,8 @@ export default function RatesPage({ onOpen }: { onOpen: (id: string) => void }) 
             <button type="button" className="btn btn-accent" onClick={estimateAll} disabled={running || !cards.length}>
               {running ? `CHECKING ${run!.done}/${run!.total}…` : 'ESTIMATE ALL'}
             </button>
-            <button type="button" className="btn btn-ghost" disabled={!pending.length}
-              onClick={() => pending.forEach((c) => dispatch({ type: 'applyEstimate', id: c.id }))}>
-              APPLY ALL ({pending.length})
+            <button type="button" className="btn btn-ghost" disabled={!pending.length || applying} onClick={applyAll}>
+              {applying ? 'APPLYING…' : `APPLY ALL (${pending.length})`}
             </button>
           </div>
         </div>
@@ -101,8 +108,8 @@ export default function RatesPage({ onOpen }: { onOpen: (id: string) => void }) 
                 <label key={g} className="field">
                   <span className="label">{g}</span>
                   <span className="input-row">
-                    <input type="number" min={0} step="0.05" value={v}
-                      onChange={(e) => { const n = num(e.target.value); if (n >= 0) dispatch({ type: 'setMultiplier', grade: g, value: n }); }} />
+                    <CommitInput type="number" min={0} step="0.05" value={String(v)}
+                      onCommit={(x) => { const n = num(x); if (n >= 0) dispatch({ type: 'setMultiplier', grade: g, value: n }); }} />
                     <button type="button" className="x" aria-label={`Remove ${g}`} onClick={() => dispatch({ type: 'removeMultiplier', grade: g })}>×</button>
                   </span>
                 </label>
@@ -123,7 +130,7 @@ export default function RatesPage({ onOpen }: { onOpen: (id: string) => void }) 
             </span>
             <label className="field">
               <span className="label">POKÉMON TCG API KEY (OPTIONAL)</span>
-              <input type="password" autoComplete="off" value={db.settings.pokemonApiKey} onChange={(e) => dispatch({ type: 'setApiKey', key: e.target.value.trim() })} />
+              <CommitInput type="password" autoComplete="off" value={db.settings.pokemonApiKey} onCommit={(x) => dispatch({ type: 'setApiKey', key: x.trim() })} />
             </label>
           </div>
         </div>

@@ -204,3 +204,13 @@ td.ledger-label, td.set-cell { font-size: 13px; color: var(--text-2); padding: 1
   .line-form { grid-template-columns: 1fr 1fr; }
   h1 { font-size: 44px; }
 }
+
+/* ---------- Sign-in, setup, status ---------- */
+.gate { min-height: 100vh; display: flex; flex-direction: column; }
+.gate-box { width: min(440px, calc(100% - 32px)); margin: 10vh auto 40px; padding: 28px; background: var(--panel); border: 1px solid var(--line); display: flex; flex-direction: column; gap: 16px; }
+.gate-box .sub { margin: 0; line-height: 1.5; }
+.gate-form { display: flex; flex-direction: column; gap: 16px; }
+.gate-form .link { align-self: flex-start; }
+.user { display: flex; align-items: center; gap: 12px; }
+.user .tag { max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); z-index: 50; width: min(560px, calc(100% - 32px)); display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 14px 16px; background: var(--surface); border: 1px solid var(--loss); color: var(--text); font-size: 14px; }

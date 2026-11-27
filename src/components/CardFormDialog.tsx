@@ -42,6 +42,7 @@ export default function CardFormDialog({ card, defaultShowId = null, onClose, on
     showId: defaultShowId ?? '',
   });
   const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
   const [est, setEst] = useState<{ busy: boolean; result?: Estimate | null; error?: string }>({ busy: false });
   const set = (k: keyof typeof f) => (e: { target: { value: string } }) => setF((p) => ({ ...p, [k]: e.target.value }));
 
@@ -58,7 +59,7 @@ export default function CardFormDialog({ card, defaultShowId = null, onClose, on
     }
   }
 
-  function submit() {
+  async function submit() {
     const qty = num(f.qty), cost = num(f.cost), market = num(f.market), salePrice = num(f.salePrice);
     if (!f.name.trim()) return setError('Card name is required.');
     if (!Number.isInteger(qty) || qty < 1) return setError('Quantity must be a whole number of at least 1.');
@@ -70,19 +71,17 @@ export default function CardFormDialog({ card, defaultShowId = null, onClose, on
       name: f.name.trim(), setName: f.setName.trim(), cardNo: f.cardNo.trim(), game: f.game.trim(),
       grade: f.grade.trim().toUpperCase(), qty, cost, market, status: f.status, location: f.location.trim(),
     };
-    if (card) {
-      dispatch({
-        type: 'updateCard', id: card.id, input,
-        sale: sold ? { price: salePrice, on: f.saleOn, payment: f.payment, buyer: f.buyer, showId: f.saleShow || null } : undefined,
-      });
-      if (est.result) dispatch({ type: 'setEstimate', id: card.id, estimate: est.result });
-      onSaved(card.id);
-    } else {
-      const id = 'R1-' + String(db.nextCard).padStart(4, '0');
-      dispatch({ type: 'addCard', input, event: f.event, on: f.on, note: f.note.trim(), paid: f.paid, showId: f.showId || null });
-      if (est.result) dispatch({ type: 'setEstimate', id, estimate: est.result });
-      onSaved(id);
-    }
+    setBusy(true);
+    setError('');
+    const estimate = est.result ?? undefined;
+    const r = card
+      ? await dispatch({
+          type: 'updateCard', id: card.id, input, estimate,
+          sale: sold ? { price: salePrice, on: f.saleOn, payment: f.payment, buyer: f.buyer, showId: f.saleShow || null } : undefined,
+        })
+      : await dispatch({ type: 'addCard', input, event: f.event, on: f.on, note: f.note.trim(), paid: f.paid, showId: f.showId || null, estimate });
+    if (!r) return setBusy(false); // error shown in the toast; keep the form open
+    onSaved(card ? card.id : r.newCardIds[0]);
   }
 
   const shows = [...db.shows].sort((a, b) => a.date.localeCompare(b.date));
@@ -93,7 +92,7 @@ export default function CardFormDialog({ card, defaultShowId = null, onClose, on
       label={card ? `EDIT · ${card.id}` : 'NEW ENTRY'}
       title={card ? card.name : 'Add to inventory'}
       submitLabel={card ? 'SAVE CHANGES' : 'ADD RECORD'}
-      busy={false}
+      busy={busy}
       error={error}
       onSubmit={submit}
       onClose={onClose}

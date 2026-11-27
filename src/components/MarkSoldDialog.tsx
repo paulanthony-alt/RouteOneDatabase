@@ -27,6 +27,7 @@ export default function MarkSoldDialog({ card: given, defaultShowId, onClose, on
   const [showId, setShowId] = useState(defaultShowId ?? todayShow);
   const [note, setNote] = useState('');
   const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
 
   const q = num(qty), p = num(price);
   const valid = card && Number.isInteger(q) && q >= 1 && q <= card.qty && p >= 0;
@@ -38,13 +39,15 @@ export default function MarkSoldDialog({ card: given, defaultShowId, onClose, on
     if (c) { setPrice(String(c.market)); setQty('1'); }
   }
 
-  function submit() {
+  async function submit() {
     if (!card) return setError('Pick a card.');
     if (!Number.isInteger(q) || q < 1 || q > card.qty) return setError(`Quantity must be between 1 and ${card.qty}.`);
     if (!(p >= 0)) return setError('Enter a sale price of $0 or more.');
-    const soldId = q === card.qty ? card.id : 'R1-' + String(db.nextCard).padStart(4, '0');
-    dispatch({ type: 'sellCard', id: card.id, qty: q, price: p, on, note: note.trim(), payment, buyer, showId: showId || null });
-    onSaved(soldId);
+    setBusy(true);
+    setError('');
+    const r = await dispatch({ type: 'sellCard', id: card.id, qty: q, price: p, on, note: note.trim(), payment, buyer, showId: showId || null });
+    if (!r) return setBusy(false);
+    onSaved(r.newCardIds[0] ?? card.id);
   }
 
   return (
@@ -52,7 +55,7 @@ export default function MarkSoldDialog({ card: given, defaultShowId, onClose, on
       label={card ? `MARK SOLD · ${card.id}` : 'RECORD SALE'}
       title={given ? given.name : 'Record a sale'}
       submitLabel="CONFIRM SALE"
-      busy={false}
+      busy={busy}
       error={error}
       onSubmit={submit}
       onClose={onClose}
