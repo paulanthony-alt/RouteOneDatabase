@@ -25,7 +25,7 @@ export default function InventoryTable({ rows, selectedId, onSelect, emptyText }
               <td className="card">
                 <button type="button" className="card-btn" onClick={() => onSelect(c.id)} aria-pressed={c.id === selectedId}>
                   <span className="name">{c.name}</span>
-                  <span className="set">{[c.set_name, c.card_no].filter(Boolean).join(' · ')}</span>
+                  <span className="set">{[c.setName, c.cardNo].filter(Boolean).join(' · ')}</span>
                 </button>
               </td>
               <td className="grade">{c.grade}</td>

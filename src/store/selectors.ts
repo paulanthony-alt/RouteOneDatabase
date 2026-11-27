@@ -1,0 +1,111 @@
+import type { Card, DB, Show } from '../types';
+import { today } from '../lib/format';
+
+export const units = (cards: Card[]) => cards.reduce((n, c) => n + c.qty, 0);
+export const total = (cards: Card[], pick: (c: Card) => number) => cards.reduce((s, c) => s + pick(c) * c.qty, 0);
+export const soldCards = (db: DB) => db.cards.filter((c) => c.status === 'Sold' && c.sale);
+export const openCards = (db: DB) => db.cards.filter((c) => c.status !== 'Sold');
+export const acquiredOn = (c: Card) => c.events[0]?.on ?? '';
+
+export interface LedgerLine {
+  on: string;
+  label: string;
+  amount: number;
+  kind: 'START' | 'BUY' | 'SALE' | 'SHOW' | 'ADJUST';
+  adjId?: number;
+}
+
+/**
+ * Bankroll movements. Purchases flagged "paid" come out, sales come in (trades
+ * bring in no money), show income/expense lines and manual adjustments apply.
+ * A split purchase is counted once, against its original record. Anything dated
+ * before the bankroll's start date is left out.
+ */
+export function cashLedger(db: DB): LedgerLine[] {
+  const out: LedgerLine[] = [{ on: db.bankroll.startedOn, label: 'Starting money', amount: db.bankroll.starting, kind: 'START' }];
+
+  const buys = new Map<string, { card: Card; amount: number; units: number }>();
+  for (const c of db.cards) {
+    if (!c.paid) continue;
+    const root = c.splitFrom ?? c.id;
+    const b = buys.get(root) ?? { card: c, amount: 0, units: 0 };
+    b.amount += c.cost * c.qty;
+    b.units += c.qty;
+    if (!c.splitFrom) b.card = c;
+    buys.set(root, b);
+  }
+  for (const [root, b] of buys) {
+    out.push({ on: acquiredOn(b.card), label: `Bought ${b.card.name} ×${b.units} (${root})`, amount: -b.amount, kind: 'BUY' });
+  }
+
+  for (const c of soldCards(db)) {
+    if (c.sale!.payment === 'Trade') continue;
+    out.push({ on: c.sale!.on, label: `Sold ${c.name} ×${c.qty} (${c.id}) · ${c.sale!.payment}`, amount: c.sale!.price * c.qty, kind: 'SALE' });
+  }
+
+  for (const s of db.shows) {
+    for (const l of s.lines) {
+      out.push({ on: s.date, label: `${s.name} · ${l.label}`, amount: l.kind === 'income' ? l.amount : -l.amount, kind: 'SHOW' });
+    }
+  }
+
+  for (const a of db.bankroll.adjustments) out.push({ on: a.on, label: a.note || 'Adjustment', amount: a.amount, kind: 'ADJUST', adjId: a.id });
+
+  // Money that moved before the starting date is already reflected in the starting amount.
+  return out
+    .filter((l) => l.kind === 'START' || l.on >= db.bankroll.startedOn)
+    .sort((x, y) => x.on.localeCompare(y.on) || (x.kind === 'START' ? -1 : y.kind === 'START' ? 1 : 0));
+}
+
+export const cashOnHand = (db: DB) => cashLedger(db).reduce((s, l) => s + l.amount, 0);
+
+const who = (s: string) => s.trim().toLowerCase();
+
+export function showStats(db: DB, show: Show) {
+  const sales = soldCards(db)
+    .filter((c) => c.sale!.showId === show.id)
+    .sort((a, b) => a.sale!.at.localeCompare(b.sale!.at));
+  const gross = total(sales, (c) => c.sale!.price);
+  const cogs = total(sales, (c) => c.cost);
+  const cardProfit = gross - cogs;
+  const income = show.lines.filter((l) => l.kind === 'income').reduce((s, l) => s + l.amount, 0);
+  const expenses = show.lines.filter((l) => l.kind === 'expense').reduce((s, l) => s + l.amount, 0);
+  const net = cardProfit + income - expenses;
+
+  const buys = db.cards.filter((c) => c.acquiredShowId === show.id);
+  const spent = total(buys.filter((c) => c.paid), (c) => c.cost);
+  const cashSales = total(sales.filter((c) => c.sale!.payment === 'Cash'), (c) => c.sale!.price);
+  const drawer = show.float + cashSales - spent;
+
+  // Attendance retention: door counts tallied on the day.
+  const visitors = show.attendance.new + show.attendance.returning;
+
+  // Customer retention: buyers at this show who had bought from us before it.
+  const earlier = new Set(
+    soldCards(db)
+      .filter((c) => c.sale!.buyer && c.sale!.showId !== show.id && c.sale!.on <= show.date)
+      .map((c) => who(c.sale!.buyer)),
+  );
+  const buyers = [...new Set(sales.filter((c) => c.sale!.buyer).map((c) => who(c.sale!.buyer)))];
+  const repeatBuyers = buyers.filter((b) => earlier.has(b));
+
+  // Inventory retention: what came to the show vs. what went home.
+  const soldUnits = units(sales);
+  const listedNow = units(db.cards.filter((c) => c.status === 'Listed'));
+  const broughtUnits = show.opening ? show.opening.units : listedNow + soldUnits;
+
+  return {
+    sales, gross, cogs, cardProfit, income, expenses, net, margin: gross ? cardProfit / gross : 0,
+    buys, spent, cashSales, drawer,
+    visitors, returningVisitors: show.attendance.returning,
+    buyers: buyers.length, repeatBuyers: repeatBuyers.length,
+    soldUnits, broughtUnits, keptUnits: Math.max(0, broughtUnits - soldUnits),
+  };
+}
+
+/** The next show on or after today, else the most recent one. */
+export function nextShow(db: DB): Show | undefined {
+  const t = today();
+  const sorted = [...db.shows].sort((a, b) => a.date.localeCompare(b.date));
+  return sorted.find((s) => s.date >= t) ?? sorted[sorted.length - 1];
+}

@@ -1,36 +1,57 @@
 export type Status = 'Held' | 'Listed' | 'Sold';
+export type Payment = 'Cash' | 'Card' | 'Venmo / Zelle' | 'Trade';
+export const PAYMENTS: Payment[] = ['Cash', 'Card', 'Venmo / Zelle', 'Trade'];
 
 export interface CardEvent {
   id: number;
-  card_id: string;
   event: string;
-  occurred_on: string; // YYYY-MM-DD
+  on: string; // YYYY-MM-DD
   note: string;
+}
+
+export interface Sale {
+  price: number; // per unit
+  on: string; // YYYY-MM-DD
+  at: string; // ISO timestamp the sale was recorded
+  payment: Payment;
+  buyer: string;
+  showId: string | null;
+}
+
+export interface Estimate {
+  value: number; // per unit, grade-adjusted
+  raw: number | null; // ungraded market the value came from, if any
+  source: string;
+  url?: string;
+  at: string; // ISO timestamp
 }
 
 export interface Card {
   id: string;
   name: string;
-  set_name: string;
-  card_no: string;
+  setName: string;
+  cardNo: string;
   game: string;
   grade: string;
   qty: number;
-  cost: number;
-  market: number;
+  cost: number; // per unit
+  market: number; // per unit
   status: Status;
   location: string;
-  sold_price: number | null;
-  sold_on: string | null;
-  updated_at: string;
-  card_events: CardEvent[];
+  /** Purchase came out of the bankroll (starting money). */
+  paid: boolean;
+  acquiredShowId: string | null;
+  /** Set on the Sold record created when part of a stack sells. */
+  splitFrom: string | null;
+  sale: Sale | null;
+  estimate: Estimate | null;
+  events: CardEvent[];
 }
 
-/** Editable fields shared by New Entry and Edit Record. */
 export interface CardInput {
   name: string;
-  set_name: string;
-  card_no: string;
+  setName: string;
+  cardNo: string;
   game: string;
   grade: string;
   qty: number;
@@ -38,4 +59,41 @@ export interface CardInput {
   market: number;
   status: Status;
   location: string;
+}
+
+export interface ShowLine {
+  id: number;
+  kind: 'income' | 'expense';
+  label: string;
+  amount: number;
+}
+
+export interface Show {
+  id: string;
+  name: string;
+  date: string; // YYYY-MM-DD
+  hours: string;
+  venue: string;
+  float: number; // cash in the drawer at open
+  lines: ShowLine[];
+  attendance: { new: number; returning: number };
+  /** Snapshot taken when the show is opened, for sell-through. */
+  opening: { at: string; units: number; value: number } | null;
+}
+
+export interface CashAdjustment {
+  id: number;
+  on: string;
+  amount: number; // + deposit, − withdrawal
+  note: string;
+}
+
+export interface DB {
+  version: 1;
+  nextCard: number;
+  nextId: number;
+  cards: Card[];
+  shows: Show[];
+  bankroll: { starting: number; startedOn: string; adjustments: CashAdjustment[] };
+  settings: { multipliers: Record<string, number>; pokemonApiKey: string };
 }

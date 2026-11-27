@@ -1,26 +1,28 @@
 import { useState } from 'react';
-import type { Card, CardInput, Status } from '../types';
-import { createCard, updateCard } from '../lib/api';
-import { today } from '../lib/format';
+import type { Card, CardInput, Estimate, Payment, Status } from '../types';
+import { PAYMENTS } from '../types';
+import { useStore } from '../store/store';
+import { estimateCard } from '../lib/estimate';
+import { cents, num, today } from '../lib/format';
 import Dialog, { Field } from './Dialog';
 
 const GAMES = ['Pokémon', 'Basketball', 'Baseball', 'Football', 'Soccer', 'Hockey', 'One Piece', 'Magic', 'Yu-Gi-Oh!'];
-const GRADES = ['RAW NM', 'RAW LP', 'RAW MP', 'PSA 10', 'PSA 9', 'PSA 8', 'CGC 10', 'CGC 9.5', 'BGS 9.5', 'SEALED'];
 const ACQUIRE_EVENTS = ['ACQUIRED', 'PULLED', 'TRADED IN'];
 
 interface Props {
   card?: Card; // present → edit mode
+  defaultShowId?: string | null;
   onClose: () => void;
   onSaved: (id: string) => void;
 }
 
-export default function CardFormDialog({ card, onClose, onSaved }: Props) {
-  const editing = Boolean(card);
+export default function CardFormDialog({ card, defaultShowId = null, onClose, onSaved }: Props) {
+  const { db, dispatch } = useStore();
   const sold = card?.status === 'Sold';
   const [f, setF] = useState({
     name: card?.name ?? '',
-    set_name: card?.set_name ?? '',
-    card_no: card?.card_no ?? '',
+    setName: card?.setName ?? '',
+    cardNo: card?.cardNo ?? '',
     game: card?.game ?? 'Pokémon',
     grade: card?.grade ?? 'RAW NM',
     qty: String(card?.qty ?? 1),
@@ -28,66 +30,110 @@ export default function CardFormDialog({ card, onClose, onSaved }: Props) {
     market: card ? String(card.market) : '',
     status: (card?.status ?? 'Held') as Status,
     location: card?.location ?? '',
-    sold_price: card?.sold_price != null ? String(card.sold_price) : '',
-    sold_on: card?.sold_on ?? '',
+    salePrice: card?.sale ? String(card.sale.price) : '',
+    saleOn: card?.sale?.on ?? '',
+    payment: (card?.sale?.payment ?? 'Cash') as Payment,
+    buyer: card?.sale?.buyer ?? '',
+    saleShow: card?.sale?.showId ?? '',
     event: 'ACQUIRED',
-    event_on: today(),
+    on: today(),
     note: '',
+    paid: true,
+    showId: defaultShowId ?? '',
   });
-  const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [est, setEst] = useState<{ busy: boolean; result?: Estimate | null; error?: string }>({ busy: false });
   const set = (k: keyof typeof f) => (e: { target: { value: string } }) => setF((p) => ({ ...p, [k]: e.target.value }));
 
-  async function submit() {
-    const qty = Number(f.qty), cost = Number(f.cost), market = Number(f.market);
-    if (!f.name.trim()) return setError('Card name is required.');
-    if (!Number.isInteger(qty) || qty < 1) return setError('Quantity must be a whole number of at least 1.');
-    if (f.cost === '' || !(cost >= 0)) return setError('Enter a cost of $0 or more.');
-    if (f.market === '' || !(market >= 0)) return setError('Enter a market value of $0 or more.');
-    const soldPrice = Number(f.sold_price);
-    if (sold && (f.sold_price === '' || !(soldPrice >= 0))) return setError('Enter a sale price of $0 or more.');
-
-    const input: CardInput = {
-      name: f.name.trim(), set_name: f.set_name.trim(), card_no: f.card_no.trim(), game: f.game.trim(),
-      grade: f.grade.trim(), qty, cost, market, status: f.status, location: f.location.trim(),
-    };
-    setBusy(true);
-    setError('');
+  async function estimate() {
+    if (!f.name.trim()) return setEst({ busy: false, error: 'Enter a card name first.' });
+    setEst({ busy: true });
+    const draft = { ...(card as Card), id: card?.id ?? '', name: f.name, setName: f.setName, cardNo: f.cardNo, game: f.game, grade: f.grade };
     try {
-      const saved = card
-        ? await updateCard(card.id, input, sold ? { price: soldPrice, on: f.sold_on } : undefined)
-        : await createCard(input, { event: f.event, on: f.event_on, note: f.note.trim() });
-      onSaved(saved.id);
+      const result = await estimateCard(db, draft);
+      setEst({ busy: false, result });
+      if (result) setF((p) => ({ ...p, market: result.value.toFixed(2) }));
     } catch (e) {
-      setError((e as Error).message);
-      setBusy(false);
+      setEst({ busy: false, error: (e as Error).message });
     }
   }
+
+  function submit() {
+    const qty = num(f.qty), cost = num(f.cost), market = num(f.market), salePrice = num(f.salePrice);
+    if (!f.name.trim()) return setError('Card name is required.');
+    if (!Number.isInteger(qty) || qty < 1) return setError('Quantity must be a whole number of at least 1.');
+    if (!(cost >= 0)) return setError('Enter a cost of $0 or more.');
+    if (!(market >= 0)) return setError('Enter a market value of $0 or more, or press ESTIMATE.');
+    if (sold && !(salePrice >= 0)) return setError('Enter a sale price of $0 or more.');
+
+    const input: CardInput = {
+      name: f.name.trim(), setName: f.setName.trim(), cardNo: f.cardNo.trim(), game: f.game.trim(),
+      grade: f.grade.trim().toUpperCase(), qty, cost, market, status: f.status, location: f.location.trim(),
+    };
+    if (card) {
+      dispatch({
+        type: 'updateCard', id: card.id, input,
+        sale: sold ? { price: salePrice, on: f.saleOn, payment: f.payment, buyer: f.buyer, showId: f.saleShow || null } : undefined,
+      });
+      if (est.result) dispatch({ type: 'setEstimate', id: card.id, estimate: est.result });
+      onSaved(card.id);
+    } else {
+      const id = 'R1-' + String(db.nextCard).padStart(4, '0');
+      dispatch({ type: 'addCard', input, event: f.event, on: f.on, note: f.note.trim(), paid: f.paid, showId: f.showId || null });
+      if (est.result) dispatch({ type: 'setEstimate', id, estimate: est.result });
+      onSaved(id);
+    }
+  }
+
+  const shows = [...db.shows].sort((a, b) => a.date.localeCompare(b.date));
+  const qty = num(f.qty), cost = num(f.cost);
 
   return (
     <Dialog
       label={card ? `EDIT · ${card.id}` : 'NEW ENTRY'}
       title={card ? card.name : 'Add to inventory'}
-      submitLabel={editing ? 'SAVE CHANGES' : 'ADD RECORD'}
-      busy={busy}
+      submitLabel={card ? 'SAVE CHANGES' : 'ADD RECORD'}
+      busy={false}
       error={error}
       onSubmit={submit}
       onClose={onClose}
     >
       <Field label="CARD NAME" wide><input required value={f.name} onChange={set('name')} autoFocus /></Field>
-      <Field label="SET"><input value={f.set_name} onChange={set('set_name')} /></Field>
-      <Field label="NUMBER"><input value={f.card_no} onChange={set('card_no')} placeholder="223/197" /></Field>
+      <Field label="SET"><input value={f.setName} onChange={set('setName')} /></Field>
+      <Field label="NUMBER"><input value={f.cardNo} onChange={set('cardNo')} placeholder="223/197" /></Field>
       <Field label="GAME / SPORT"><input list="games" value={f.game} onChange={set('game')} /></Field>
       <Field label="GRADE"><input list="grades" value={f.grade} onChange={set('grade')} /></Field>
       <Field label="QTY"><input type="number" min={1} step={1} required value={f.qty} onChange={set('qty')} /></Field>
       <Field label="LOCATION"><input value={f.location} onChange={set('location')} placeholder="Case 1 · A" /></Field>
       <Field label="COST / UNIT ($)"><input type="number" min={0} step="0.01" required value={f.cost} onChange={set('cost')} /></Field>
-      <Field label="MARKET / UNIT ($)"><input type="number" min={0} step="0.01" required value={f.market} onChange={set('market')} /></Field>
+      <Field label="MARKET / UNIT ($)">
+        <span className="input-row">
+          <input type="number" min={0} step="0.01" required value={f.market} onChange={set('market')} />
+          <button type="button" className="btn btn-ghost btn-sm" onClick={estimate} disabled={est.busy}>{est.busy ? '…' : 'ESTIMATE'}</button>
+        </span>
+      </Field>
+      {(est.result !== undefined || est.error) && (
+        <p className="field wide est-note" role="status">
+          {est.error ? <span className="loss">{est.error}</span>
+            : est.result ? <>Estimated {cents(est.result.value)} — {est.result.source}</>
+            : <>No price found automatically. Enter market value by hand.</>}
+        </p>
+      )}
 
       {sold ? (
         <>
-          <Field label="SOLD / UNIT ($)"><input type="number" min={0} step="0.01" required value={f.sold_price} onChange={set('sold_price')} /></Field>
-          <Field label="SOLD ON"><input type="date" required value={f.sold_on} onChange={set('sold_on')} /></Field>
+          <Field label="SOLD / UNIT ($)"><input type="number" min={0} step="0.01" required value={f.salePrice} onChange={set('salePrice')} /></Field>
+          <Field label="SOLD ON"><input type="date" required value={f.saleOn} onChange={set('saleOn')} /></Field>
+          <Field label="PAYMENT">
+            <select value={f.payment} onChange={set('payment')}>{PAYMENTS.map((p) => <option key={p}>{p}</option>)}</select>
+          </Field>
+          <Field label="BUYER"><input value={f.buyer} onChange={set('buyer')} /></Field>
+          <Field label="SOLD AT SHOW" wide>
+            <select value={f.saleShow} onChange={set('saleShow')}>
+              <option value="">Not at a show</option>
+              {shows.map((s) => <option key={s.id} value={s.id}>{s.name} · {s.date}</option>)}
+            </select>
+          </Field>
         </>
       ) : (
         <Field label="STATUS">
@@ -98,20 +144,31 @@ export default function CardFormDialog({ card, onClose, onSaved }: Props) {
         </Field>
       )}
 
-      {!editing && (
+      {!card && (
         <>
           <Field label="HOW IT CAME IN">
-            <select value={f.event} onChange={set('event')}>
-              {ACQUIRE_EVENTS.map((e) => <option key={e}>{e}</option>)}
+            <select value={f.event} onChange={set('event')}>{ACQUIRE_EVENTS.map((e) => <option key={e}>{e}</option>)}</select>
+          </Field>
+          <Field label="DATE"><input type="date" required value={f.on} onChange={set('on')} /></Field>
+          <Field label="BOUGHT AT SHOW">
+            <select value={f.showId} onChange={set('showId')}>
+              <option value="">Not at a show</option>
+              {shows.map((s) => <option key={s.id} value={s.id}>{s.name} · {s.date}</option>)}
             </select>
           </Field>
-          <Field label="DATE"><input type="date" required value={f.event_on} onChange={set('event_on')} /></Field>
           <Field label="NOTE" wide><input value={f.note} onChange={set('note')} placeholder="Gold Coast Card Show — trade-in" /></Field>
+          <label className="check wide">
+            <input type="checkbox" checked={f.paid} onChange={(e) => setF((p) => ({ ...p, paid: e.target.checked }))} />
+            <span>
+              Paid out of our money
+              {f.paid && qty >= 1 && cost >= 0 ? <span className="muted"> — takes {cents(qty * cost)} out of the bankroll</span> : null}
+            </span>
+          </label>
         </>
       )}
 
       <datalist id="games">{GAMES.map((g) => <option key={g} value={g} />)}</datalist>
-      <datalist id="grades">{GRADES.map((g) => <option key={g} value={g} />)}</datalist>
+      <datalist id="grades">{Object.keys(db.settings.multipliers).map((g) => <option key={g} value={g} />)}</datalist>
     </Dialog>
   );
 }
