@@ -16,6 +16,8 @@ const config = {
 
 /** Firebase is used when the project is configured; otherwise the app runs on this browser's storage. */
 export const firebaseEnabled = Boolean(config.apiKey && config.projectId);
+/** When set, everyone signs in to this one account and the login screen asks only for the password. */
+export const sharedEmail = ((env.VITE_FIREBASE_SHARED_EMAIL as string | undefined) ?? '').trim().toLowerCase();
 const emulators = env.VITE_FIREBASE_EMULATORS === 'true';
 
 let app: FirebaseApp | undefined;

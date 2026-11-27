@@ -20,6 +20,13 @@ Without Firebase settings it runs on this browser's storage only, with no login.
    ```
 6. Sign in. The first time, choose **Upload this browser's data**, **Start empty**, or **Start with sample data**.
 
+### One password for the whole site
+
+Instead of an account per person, create a single user in **Authentication → Users** (use an email
+inbox you control, so you can reset it), add a `staff` document for that email, and set
+`VITE_FIREBASE_SHARED_EMAIL` to it in `.env.local`. The login screen then asks only for the password.
+To change it, use **Reset password** on that user (sent to that inbox), then share the new one.
+
 ## Develop
 
 ```bash

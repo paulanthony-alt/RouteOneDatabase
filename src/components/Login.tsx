@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { sendPasswordResetEmail, signInWithEmailAndPassword } from 'firebase/auth';
-import { fb } from '../lib/firebase';
+import { fb, sharedEmail } from '../lib/firebase';
 import Gate from './Gate';
 
 const MESSAGES: Record<string, string> = {
@@ -13,10 +13,13 @@ const MESSAGES: Record<string, string> = {
   'auth/too-many-requests': 'Too many tries. Wait a minute, or reset your password.',
   'auth/network-request-failed': 'No connection. Check the Wi-Fi and try again.',
 };
-const explain = (e: unknown) => MESSAGES[(e as { code?: string }).code ?? ''] ?? (e as Error).message;
+const explain = (e: unknown) => {
+  const m = MESSAGES[(e as { code?: string }).code ?? ''] ?? (e as Error).message;
+  return sharedEmail ? m.replace('Wrong email or password.', 'Wrong password.').replace(', or reset your password', '') : m;
+};
 
 export default function Login() {
-  const [email, setEmail] = useState('');
+  const [email, setEmail] = useState(sharedEmail);
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -49,18 +52,25 @@ export default function Login() {
   return (
     <Gate label="STAFF SIGN-IN">
       <form className="gate-form" onSubmit={submit}>
+        {sharedEmail ? (
+          // Hidden username so password managers save the shared login correctly.
+          <input type="hidden" autoComplete="username" value={sharedEmail} readOnly />
+        ) : (
+          <label className="field">
+            <span className="label">EMAIL</span>
+            <input type="email" required autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} autoFocus />
+          </label>
+        )}
         <label className="field">
-          <span className="label">EMAIL</span>
-          <input type="email" required autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} autoFocus />
-        </label>
-        <label className="field">
-          <span className="label">PASSWORD</span>
-          <input type="password" required autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} />
+          <span className="label">{sharedEmail ? 'SITE PASSWORD' : 'PASSWORD'}</span>
+          <input type="password" required autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} autoFocus={Boolean(sharedEmail)} />
         </label>
         {error && <p className="form-error" role="alert">{error}</p>}
         {info && <p className="note" role="status">{info}</p>}
         <button className="btn btn-accent" type="submit" disabled={busy}>{busy ? 'SIGNING IN…' : 'SIGN IN'}</button>
-        <button className="link" type="button" onClick={reset}>FORGOT PASSWORD</button>
+        {sharedEmail
+          ? <p className="note">Ask the owner for the site password.</p>
+          : <button className="link" type="button" onClick={reset}>FORGOT PASSWORD</button>}
       </form>
     </Gate>
   );

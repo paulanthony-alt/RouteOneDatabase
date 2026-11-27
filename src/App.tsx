@@ -5,7 +5,7 @@ import { StoreProvider, useStore } from './store/store';
 import type { Backend } from './store/backend';
 import { localBackend } from './store/local';
 import { firestoreBackend } from './store/firestore';
-import { fb, firebaseEnabled } from './lib/firebase';
+import { fb, firebaseEnabled, sharedEmail } from './lib/firebase';
 import Gate from './components/Gate';
 import Login from './components/Login';
 import Setup from './components/Setup';
@@ -48,7 +48,7 @@ function fallback(phase: Phase, apply: Backend['apply'], user?: User): ReactNode
     <Gate label={denied ? 'NO ACCESS' : 'COULDN’T LOAD'} title={denied ? 'Not on the staff list' : 'Something went wrong'}>
       <p className="sub">
         {denied
-          ? `${user?.email ?? 'This account'} is signed in, but isn’t on the staff list. Ask the owner to add it in Firebase (Firestore → staff).`
+          ? `${user?.email ?? 'This account'} is signed in, but isn’t on the staff list. Add a document with that email as its ID in Firebase (Firestore → staff).`
           : phase.error.message}
       </p>
       {user && <button type="button" className="btn btn-ghost" onClick={() => signOut(fb().auth)}>SIGN OUT</button>}
@@ -125,7 +125,7 @@ function Shell({ user }: { user?: User }) {
         </span>
         {user && (
           <span className="user">
-            <span className="tag" title={user.email ?? ''}>{(user.email ?? '').toUpperCase()}</span>
+            {!sharedEmail && <span className="tag" title={user.email ?? ''}>{(user.email ?? '').toUpperCase()}</span>}
             <button className="link" type="button" onClick={() => signOut(fb().auth)}>SIGN OUT</button>
           </span>
         )}
